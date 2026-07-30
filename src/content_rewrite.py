@@ -34,6 +34,8 @@ def _extract_json(text: str) -> dict:
 async def rewrite(title: str, description: str) -> tuple[str, str]:
     if not CFG.rewrite_copy:
         return title, description
+    if not title.strip() and not description.strip():
+        return title, description
     client = _get_client()
     for attempt in range(3):
         try:

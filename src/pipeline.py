@@ -1,6 +1,8 @@
 """End-to-end orchestrator: one product row → N new variants + rewritten copy."""
 
 import asyncio
+import random
+import string
 import traceback
 
 import httpx
@@ -22,8 +24,26 @@ CONTENT_TYPES = {
 }
 
 
+NEW_ID_COL_PREFIX = "new_"
+_ID_ALPHABET = string.ascii_uppercase + string.digits
+
+
+def _new_asin_like(original: str) -> str:
+    """Generate an ASIN-lookalike: 10 uppercase alphanumeric chars, B0-prefix."""
+    length = max(len(original), 10) if original else 10
+    body = "".join(random.choices(_ID_ALPHABET, k=length - 2))
+    return f"B0{body}"
+
+
 def _output_fieldnames() -> list[str]:
-    fields = [CFG.col_id, CFG.col_title, CFG.col_description, CFG.col_image_url]
+    new_id_col = NEW_ID_COL_PREFIX + CFG.col_id
+    fields = [
+        CFG.col_id,
+        new_id_col,
+        CFG.col_title,
+        CFG.col_description,
+        CFG.col_image_url,
+    ]
     for i in range(1, CFG.variations_per_image + 1):
         fields.append(f"variant_{i}_url")
     fields.append("error")
@@ -43,8 +63,12 @@ async def process_row(
         desc = str(row.get(CFG.col_description, "") or "")
         image_url = str(row.get(CFG.col_image_url, "") or "").strip()
 
+        new_id_col = NEW_ID_COL_PREFIX + CFG.col_id
+        new_id = _new_asin_like(pid)
+
         out: dict = {
             CFG.col_id: pid,
+            new_id_col: new_id,
             CFG.col_title: title,
             CFG.col_description: desc,
             CFG.col_image_url: image_url,
@@ -74,7 +98,7 @@ async def process_row(
                 scrubbed = await asyncio.to_thread(
                     scrub_and_randomize, raw, ext, CFG.output_quality
                 )
-                key = make_key(pid or "product", idx, ext)
+                key = make_key(new_id or "product", idx, ext)
                 url = await upload(key, scrubbed, ctype)
                 return idx, url
 

@@ -52,8 +52,16 @@ SKU-001,...,...,https://...
 ## Output
 
 ```
-id,title,description,image_url,variant_1_url,variant_2_url,variant_3_url,error
-SKU-001,<rewritten>,<rewritten>,<original>,https://cdn.../uuid-v1.webp,...,...,
+<id_col>,new_<id_col>,<title_col>,<description_col>,<image_url_col>,variant_1_url,variant_2_url,variant_3_url,error
+```
+
+Two ID columns: the original (preserved) and a freshly generated ASIN-style
+lookalike (`B0` + 8 random uppercase alphanumeric) so downstream systems can
+be seeded with new IDs while keeping the mapping to the source.
+
+Example row:
+```
+B0FV2PQ1NQ,B0K7X2M9QW,<rewritten title>,<rewritten desc>,<original url>,https://cdn.../v1.webp,...,...,
 ```
 
 Failed rows are still written with the `error` column populated so you can retry them.
