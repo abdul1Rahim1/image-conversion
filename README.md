@@ -24,9 +24,14 @@ cp .env.example .env
 
 ```
 python run.py sample_products.csv out/products_new.csv
+python run.py sample_products.json out/products_new.json     # JSON array
+python run.py sample_products.json out/products_new.jsonl    # NDJSON
 ```
 
-The output file is append-only and checkpointed by `id`: killing and restarting resumes where it left off.
+Output format is picked from the extension. All three are resumable —
+kill the run and re-invoke with the same command; already-processed IDs
+are skipped. For `.json` output a `.jsonl` sidecar is written during the
+run and the final `.json` array is emitted at the end.
 
 ## Configuration
 

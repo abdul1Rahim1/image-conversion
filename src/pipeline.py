@@ -11,7 +11,13 @@ from tqdm.asyncio import tqdm_asyncio
 from .config import CFG
 from .content_rewrite import rewrite
 from .image_variations import generate_variations, make_provider
-from .io_utils import already_processed_ids, append_output_row, download_bytes, load_rows
+from .io_utils import (
+    already_processed_ids,
+    append_output_row,
+    download_bytes,
+    finalize_output,
+    load_rows,
+)
 from .metadata import scrub_and_randomize
 from .storage import make_key, upload
 
@@ -122,6 +128,7 @@ async def run(input_path: str, output_path: str) -> None:
     print(f"Loaded {len(rows)} rows; {len(done)} already processed; {len(todo)} to do.")
 
     if not todo:
+        finalize_output(output_path)
         return
 
     provider = make_provider()
@@ -129,3 +136,5 @@ async def run(input_path: str, output_path: str) -> None:
     async with httpx.AsyncClient() as http:
         tasks = [process_row(r, provider, http, sem, output_path) for r in todo]
         await tqdm_asyncio.gather(*tasks, desc="Products")
+
+    finalize_output(output_path)

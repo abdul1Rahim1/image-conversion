@@ -1,8 +1,7 @@
 import csv
-import json
 import io
+import json
 from pathlib import Path
-from typing import Iterator
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -22,31 +21,71 @@ def load_rows(path: str) -> list[dict]:
     return list(reader)
 
 
-def write_output_csv(path: str, rows: list[dict], fieldnames: list[str]) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
-        w.writeheader()
-        w.writerows(rows)
+def _checkpoint_path(output_path: str) -> Path:
+    """.json output uses a .jsonl sidecar as the append-only checkpoint;
+    the aggregated .json file is written at the end of the run."""
+    p = Path(output_path)
+    if p.suffix.lower() == ".json":
+        return p.with_suffix(".jsonl")
+    return p
 
 
-def append_output_row(path: str, row: dict, fieldnames: list[str]) -> None:
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    exists = p.exists()
-    with open(p, "a", newline="", encoding="utf-8") as f:
+def append_output_row(output_path: str, row: dict, fieldnames: list[str]) -> None:
+    p = Path(output_path)
+    ext = p.suffix.lower()
+    ckpt = _checkpoint_path(output_path)
+    ckpt.parent.mkdir(parents=True, exist_ok=True)
+
+    if ext in (".json", ".jsonl"):
+        with open(ckpt, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        return
+
+    exists = ckpt.exists()
+    with open(ckpt, "a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         if not exists:
             w.writeheader()
         w.writerow(row)
 
 
-def already_processed_ids(path: str, id_field: str = "id") -> set[str]:
-    p = Path(path)
+def already_processed_ids(output_path: str, id_field: str = "id") -> set[str]:
+    p = _checkpoint_path(output_path)
     if not p.exists():
         return set()
+    ext = p.suffix.lower()
+    if ext == ".jsonl":
+        ids: set[str] = set()
+        with open(p, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                r = json.loads(line)
+                if r.get(id_field):
+                    ids.add(str(r[id_field]))
+        return ids
     with open(p, newline="", encoding="utf-8") as f:
         return {r[id_field] for r in csv.DictReader(f) if r.get(id_field)}
+
+
+def finalize_output(output_path: str) -> None:
+    """When the user asked for .json, aggregate the .jsonl checkpoint into a
+    single JSON array. Safe to call multiple times; no-op for csv/jsonl."""
+    p = Path(output_path)
+    if p.suffix.lower() != ".json":
+        return
+    ckpt = p.with_suffix(".jsonl")
+    if not ckpt.exists():
+        return
+    rows: list[dict] = []
+    with open(ckpt, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(rows, f, ensure_ascii=False, indent=2)
 
 
 @retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=1, min=2, max=16))
