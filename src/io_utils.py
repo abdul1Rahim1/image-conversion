@@ -30,6 +30,16 @@ def _checkpoint_path(output_path: str) -> Path:
     return p
 
 
+def _csv_encode(v):
+    if v is None:
+        return ""
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, ensure_ascii=False)
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    return v
+
+
 def append_output_row(output_path: str, row: dict, fieldnames: list[str]) -> None:
     p = Path(output_path)
     ext = p.suffix.lower()
@@ -43,10 +53,10 @@ def append_output_row(output_path: str, row: dict, fieldnames: list[str]) -> Non
 
     exists = ckpt.exists()
     with open(ckpt, "a", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         if not exists:
             w.writeheader()
-        w.writerow(row)
+        w.writerow({k: _csv_encode(v) for k, v in row.items()})
 
 
 def already_processed_ids(output_path: str, id_field: str = "id") -> set[str]:

@@ -41,19 +41,29 @@ def _new_asin_like(original: str) -> str:
     return f"B0{body}"
 
 
-def _output_fieldnames() -> list[str]:
+def build_fieldnames(rows: list[dict]) -> list[str]:
+    """Union of every key across every input row, in first-seen order, plus
+    the pipeline's added columns. Used as CSV header — irrelevant for JSON."""
     new_id_col = NEW_ID_COL_PREFIX + CFG.col_id
-    fields = [
+    priority = [
         CFG.col_id,
         new_id_col,
         CFG.col_title,
         CFG.col_description,
         CFG.col_image_url,
     ]
-    for i in range(1, CFG.variations_per_image + 1):
-        fields.append(f"variant_{i}_url")
-    fields.append("error")
-    return fields
+    tail = [f"variant_{i}_url" for i in range(1, CFG.variations_per_image + 1)]
+    tail.append("error")
+
+    seen: set[str] = set(priority) | set(tail)
+    middle: list[str] = []
+    for r in rows:
+        for k in r.keys():
+            k = str(k)
+            if k not in seen:
+                seen.add(k)
+                middle.append(k)
+    return priority + middle + tail
 
 
 async def process_row(
@@ -62,6 +72,7 @@ async def process_row(
     http: httpx.AsyncClient,
     sem: asyncio.Semaphore,
     output_path: str,
+    fieldnames: list[str],
 ) -> None:
     async with sem:
         pid = str(row.get(CFG.col_id, "")).strip()
@@ -72,14 +83,14 @@ async def process_row(
         new_id_col = NEW_ID_COL_PREFIX + CFG.col_id
         new_id = _new_asin_like(pid)
 
-        out: dict = {
-            CFG.col_id: pid,
-            new_id_col: new_id,
-            CFG.col_title: title,
-            CFG.col_description: desc,
-            CFG.col_image_url: image_url,
-            "error": "",
-        }
+        # Preserve every input field. Overlay only what the pipeline changes
+        # or adds (new_<id>, rewritten title/desc, variant URLs, error).
+        out: dict = dict(row)
+        out[new_id_col] = new_id
+        out["error"] = ""
+        for i in range(1, CFG.variations_per_image + 1):
+            out.setdefault(f"variant_{i}_url", "")
+
         try:
             if not image_url:
                 raise ValueError("empty image_url")
@@ -118,11 +129,12 @@ async def process_row(
             out["error"] = f"{type(e).__name__}: {e}"
             traceback.print_exc()
 
-        append_output_row(output_path, out, _output_fieldnames())
+        append_output_row(output_path, out, fieldnames)
 
 
 async def run(input_path: str, output_path: str) -> None:
     rows = load_rows(input_path)
+    fieldnames = build_fieldnames(rows)
     done = already_processed_ids(output_path, CFG.col_id)
     todo = [r for r in rows if str(r.get(CFG.col_id, "")).strip() not in done]
     print(f"Loaded {len(rows)} rows; {len(done)} already processed; {len(todo)} to do.")
@@ -134,7 +146,9 @@ async def run(input_path: str, output_path: str) -> None:
     provider = make_provider()
     sem = asyncio.Semaphore(CFG.concurrency)
     async with httpx.AsyncClient() as http:
-        tasks = [process_row(r, provider, http, sem, output_path) for r in todo]
+        tasks = [
+            process_row(r, provider, http, sem, output_path, fieldnames) for r in todo
+        ]
         await tqdm_asyncio.gather(*tasks, desc="Products")
 
     finalize_output(output_path)
