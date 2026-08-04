@@ -75,6 +75,70 @@ def build_fieldnames(rows: list[dict]) -> list[str]:
     return priority + middle + tail
 
 
+async def materialize(
+    row: dict,
+    provider,
+    http: httpx.AsyncClient,
+) -> dict:
+    """Run the pipeline against a single input row and return the processed
+    output dict. Pure computation — no locks, no file I/O. Safe to call from
+    a web handler. Errors are caught and reported in the returned dict's
+    `error` field so callers always get a usable row."""
+    pid = str(row.get(CFG.col_id, "")).strip()
+    title = str(row.get(CFG.col_title, "") or "")
+    desc = str(row.get(CFG.col_description, "") or "")
+    image_url = str(row.get(CFG.col_image_url, "") or "").strip()
+
+    new_id_col = NEW_ID_COL_PREFIX + CFG.col_id
+    new_id = _new_asin_like(pid)
+
+    out: dict = dict(row)
+    out[new_id_col] = new_id
+    out["error"] = ""
+    for i in range(1, CFG.variations_per_image + 1):
+        out.setdefault(_variant_col(i), "")
+
+    try:
+        if not image_url:
+            raise ValueError("empty image_url")
+
+        source_bytes = await download_bytes(image_url, http)
+
+        variants_task = generate_variations(
+            provider, source_bytes, CFG.variations_per_image
+        )
+        rewrite_task = rewrite(title, desc)
+        variants, (new_title, new_desc) = await asyncio.gather(
+            variants_task, rewrite_task
+        )
+
+        out[CFG.col_title] = new_title
+        out[CFG.col_description] = new_desc
+
+        ext = CFG.output_format
+        ctype = CONTENT_TYPES.get(ext, "application/octet-stream")
+
+        async def _finalize(idx: int, raw: bytes) -> tuple[int, str]:
+            scrubbed = await asyncio.to_thread(
+                scrub_and_randomize, raw, ext, CFG.output_quality
+            )
+            key = make_key(new_id or "product", idx, ext)
+            url = await upload(key, scrubbed, ctype)
+            return idx, url
+
+        results = await asyncio.gather(
+            *[_finalize(i + 1, v) for i, v in enumerate(variants)]
+        )
+        for idx, url in results:
+            out[_variant_col(idx)] = url
+
+    except Exception as e:
+        out["error"] = f"{type(e).__name__}: {e}"
+        traceback.print_exc()
+
+    return out
+
+
 async def process_row(
     row: dict,
     provider,
@@ -84,60 +148,7 @@ async def process_row(
     fieldnames: list[str],
 ) -> None:
     async with sem:
-        pid = str(row.get(CFG.col_id, "")).strip()
-        title = str(row.get(CFG.col_title, "") or "")
-        desc = str(row.get(CFG.col_description, "") or "")
-        image_url = str(row.get(CFG.col_image_url, "") or "").strip()
-
-        new_id_col = NEW_ID_COL_PREFIX + CFG.col_id
-        new_id = _new_asin_like(pid)
-
-        # Preserve every input field. Overlay only what the pipeline changes
-        # or adds (new_<id>, rewritten title/desc, variant URLs, error).
-        out: dict = dict(row)
-        out[new_id_col] = new_id
-        out["error"] = ""
-        for i in range(1, CFG.variations_per_image + 1):
-            out.setdefault(_variant_col(i), "")
-
-        try:
-            if not image_url:
-                raise ValueError("empty image_url")
-
-            source_bytes = await download_bytes(image_url, http)
-
-            variants_task = generate_variations(
-                provider, source_bytes, CFG.variations_per_image
-            )
-            rewrite_task = rewrite(title, desc)
-            variants, (new_title, new_desc) = await asyncio.gather(
-                variants_task, rewrite_task
-            )
-
-            out[CFG.col_title] = new_title
-            out[CFG.col_description] = new_desc
-
-            ext = CFG.output_format
-            ctype = CONTENT_TYPES.get(ext, "application/octet-stream")
-
-            async def _finalize(idx: int, raw: bytes) -> tuple[int, str]:
-                scrubbed = await asyncio.to_thread(
-                    scrub_and_randomize, raw, ext, CFG.output_quality
-                )
-                key = make_key(new_id or "product", idx, ext)
-                url = await upload(key, scrubbed, ctype)
-                return idx, url
-
-            results = await asyncio.gather(
-                *[_finalize(i + 1, v) for i, v in enumerate(variants)]
-            )
-            for idx, url in results:
-                out[_variant_col(idx)] = url
-
-        except Exception as e:
-            out["error"] = f"{type(e).__name__}: {e}"
-            traceback.print_exc()
-
+        out = await materialize(row, provider, http)
         append_output_row(output_path, out, fieldnames)
 
 
