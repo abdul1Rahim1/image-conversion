@@ -9,3 +9,6 @@ replicate>=0.32
 tenacity>=8.3
 python-slugify>=8.0
 tqdm>=4.66
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
