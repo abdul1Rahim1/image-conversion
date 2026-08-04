@@ -31,7 +31,16 @@ CONTENT_TYPES = {
 
 
 NEW_ID_COL_PREFIX = "new_"
+SINGLE_IMAGE_COL = "image_url"
 _ID_ALPHABET = string.ascii_uppercase + string.digits
+
+
+def _variant_col(idx: int) -> str:
+    """When N=1, output the single image under `image_url`. When N>1, use
+    the numbered `variant_N_url` columns so a row makes sense unambiguously."""
+    if CFG.variations_per_image == 1:
+        return SINGLE_IMAGE_COL
+    return f"variant_{idx}_url"
 
 
 def _new_asin_like(original: str) -> str:
@@ -52,7 +61,7 @@ def build_fieldnames(rows: list[dict]) -> list[str]:
         CFG.col_description,
         CFG.col_image_url,
     ]
-    tail = [f"variant_{i}_url" for i in range(1, CFG.variations_per_image + 1)]
+    tail = [_variant_col(i) for i in range(1, CFG.variations_per_image + 1)]
     tail.append("error")
 
     seen: set[str] = set(priority) | set(tail)
@@ -89,7 +98,7 @@ async def process_row(
         out[new_id_col] = new_id
         out["error"] = ""
         for i in range(1, CFG.variations_per_image + 1):
-            out.setdefault(f"variant_{i}_url", "")
+            out.setdefault(_variant_col(i), "")
 
         try:
             if not image_url:
@@ -123,7 +132,7 @@ async def process_row(
                 *[_finalize(i + 1, v) for i, v in enumerate(variants)]
             )
             for idx, url in results:
-                out[f"variant_{idx}_url"] = url
+                out[_variant_col(idx)] = url
 
         except Exception as e:
             out["error"] = f"{type(e).__name__}: {e}"

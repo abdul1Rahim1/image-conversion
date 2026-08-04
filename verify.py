@@ -81,24 +81,29 @@ def audit_row(orig: dict, out: dict, client: httpx.AsyncClient | httpx.Client) -
         if stub:
             id_tokens.append(stub)
 
+    urls_to_check: list[tuple[str, str]] = []
+    if out.get("image_url"):
+        urls_to_check.append(("image", str(out["image_url"])))
     for i in range(1, 10):
-        url = out.get(f"variant_{i}_url")
-        if not url:
-            continue
+        u = out.get(f"variant_{i}_url")
+        if u:
+            urls_to_check.append((f"variant_{i}", str(u)))
+
+    for label, url in urls_to_check:
         try:
-            r = client.get(str(url), timeout=60, follow_redirects=True)
+            r = client.get(url, timeout=60, follow_redirects=True)
             r.raise_for_status()
             blob = r.content
         except Exception as e:
-            problems.append(f"variant_{i}: download failed ({e})")
+            problems.append(f"{label}: download failed ({e})")
             continue
 
         text_leaks = _bytes_scan(blob, LEAK_TOKENS + id_tokens)
         if text_leaks:
-            problems.append(f"variant_{i}: leak in bytes → {text_leaks}")
+            problems.append(f"{label}: leak in bytes → {text_leaks}")
         prov_hits = _bytes_scan(blob, PROVENANCE_TOKENS)
         if prov_hits:
-            problems.append(f"variant_{i}: AI-provenance metadata present → {prov_hits}")
+            problems.append(f"{label}: AI-provenance metadata present → {prov_hits}")
 
     for field, orig_val in (("Title", orig_title), ("Category", orig_desc)):
         new_val = str(out.get(field, ""))

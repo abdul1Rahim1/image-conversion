@@ -1,6 +1,20 @@
 """Prompt library for image edits and copy rewrites."""
 
+# Prompts are ordered by safety for e-commerce use. Index 0 (front-facing,
+# clean white background) is the default when only one image is generated —
+# it's the shot customers expect on a product listing and the least likely
+# to be misread by the model. Later prompts add angle variety when N > 1.
 VARIATION_PROMPTS = [
+    (
+        "Produce a professional e-commerce photograph of the SAME product "
+        "shown. Do not alter brand, logo, colors, shape, or any printed text. "
+        "Change ONLY: camera angle (front-facing straight on), lighting "
+        "(bright even softbox), background (pure white infinity cove), and "
+        "eliminate hard shadows. Must be indistinguishable from a real "
+        "catalog photograph of this exact SKU. No watermark, no logo, no "
+        "text overlay, no border, no signature — no elements not present "
+        "on the physical product itself."
+    ),
     (
         "This is a product catalog image. Create another authentic professional "
         "studio photograph of the EXACT SAME product. Preserve the product's "
@@ -9,7 +23,7 @@ VARIATION_PROMPTS = [
         "quarter view), lighting (softer key light from the left), shadows, "
         "and a clean neutral seamless background. Output must look like a "
         "real studio shot of the same physical product — no drawing, no "
-        "illustration, no stylization."
+        "illustration, no stylization, no added text or watermarks."
     ),
     (
         "Reshoot this exact product from a different perspective. Keep every "
@@ -18,15 +32,7 @@ VARIATION_PROMPTS = [
         "perspective (slight top-down), lighting (warm diffused overhead), "
         "surface reflections, depth of field (shallow focus on the label), "
         "and a subtle contextual surface (light wood or matte white). "
-        "Photorealistic studio quality only."
-    ),
-    (
-        "Produce another professional e-commerce photograph of the SAME "
-        "product shown. Do not alter brand, logo, colors, shape, or any "
-        "printed text. Change ONLY: camera angle (front-facing straight on), "
-        "lighting (bright even softbox), background (pure white infinity "
-        "cove), and eliminate hard shadows. Must be indistinguishable from "
-        "a real catalog photograph of this exact SKU."
+        "Photorealistic studio quality only, no added text or watermarks."
     ),
     (
         "Create another realistic product photo of this exact item. Preserve "
@@ -34,7 +40,8 @@ VARIATION_PROMPTS = [
         "Change ONLY: angle (side profile), a moody low-key lighting setup "
         "with a single rim light, dark gradient background, and glossy "
         "reflection on the surface below. Photograph must remain a "
-        "faithful representation of the actual product."
+        "faithful representation of the actual product, no added text "
+        "or watermarks."
     ),
 ]
 
