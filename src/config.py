@@ -35,7 +35,7 @@ class Config:
     s3_region: str = _get("S3_REGION", "auto")
     public_base_url: str = _get("PUBLIC_BASE_URL", "").rstrip("/")
 
-    variations_per_image: int = int(_get("VARIATIONS_PER_IMAGE", "3"))
+    variations_per_image: int = int(_get("VARIATIONS_PER_IMAGE", "1"))
     concurrency: int = int(_get("CONCURRENCY", "4"))
     output_format: str = _get("OUTPUT_FORMAT", "webp").lower()
     output_quality: int = int(_get("OUTPUT_QUALITY", "85"))
