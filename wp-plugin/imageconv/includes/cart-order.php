@@ -15,12 +15,12 @@ defined( 'ABSPATH' ) || exit;
  *   become real products in the WooCommerce DB tied to that order.
  */
 
-const ASB_META_ASIN         = '_asb_source_asin';
-const ASB_META_DRAFT        = '_asb_phantom_draft';
-const ASB_META_MATERIALIZED = '_asb_materialized_at';
+const IMAGECONV_META_ASIN         = '_imageconv_source_asin';
+const IMAGECONV_META_DRAFT        = '_imageconv_phantom_draft';
+const IMAGECONV_META_MATERIALIZED = '_imageconv_materialized_at';
 
 add_action( 'template_redirect', function () {
-    if ( ! isset( $_GET['asb_action'] ) || $_GET['asb_action'] !== 'add_to_cart' ) {
+    if ( ! isset( $_GET['imageconv_action'] ) || $_GET['imageconv_action'] !== 'add_to_cart' ) {
         return;
     }
     if ( ! isset( $_GET['asin'] ) ) {
@@ -28,14 +28,14 @@ add_action( 'template_redirect', function () {
     }
     $asin = sanitize_text_field( wp_unslash( $_GET['asin'] ) );
     $nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
-    if ( ! wp_verify_nonce( $nonce, 'asb_add_to_cart_' . $asin ) ) {
+    if ( ! wp_verify_nonce( $nonce, 'imageconv_add_to_cart_' . $asin ) ) {
         wp_die( 'Invalid nonce' );
     }
     if ( ! class_exists( 'WooCommerce' ) || ! WC()->cart ) {
         wp_die( 'WooCommerce not available' );
     }
 
-    $data = asb_materialize( $asin );
+    $data = imageconv_materialize( $asin );
     if ( is_wp_error( $data ) ) {
         wp_die( 'Could not prepare product: ' . esc_html( $data->get_error_message() ) );
     }
@@ -44,7 +44,7 @@ add_action( 'template_redirect', function () {
         wp_die( 'Product data missing' );
     }
 
-    $product_id = asb_upsert_draft_product( $asin, $product );
+    $product_id = imageconv_upsert_draft_product( $asin, $product );
     if ( is_wp_error( $product_id ) ) {
         wp_die( 'Could not create product: ' . esc_html( $product_id->get_error_message() ) );
     }
@@ -58,11 +58,11 @@ add_action( 'template_redirect', function () {
  * Find an existing draft phantom product for this ASIN or create one.
  * Kept as draft until the order is placed.
  */
-function asb_upsert_draft_product( $asin, $product ) {
+function imageconv_upsert_draft_product( $asin, $product ) {
     $existing = get_posts( [
         'post_type'   => 'product',
         'post_status' => [ 'draft', 'private' ],
-        'meta_key'    => ASB_META_ASIN,
+        'meta_key'    => IMAGECONV_META_ASIN,
         'meta_value'  => $asin,
         'numberposts' => 1,
         'fields'      => 'ids',
@@ -91,13 +91,13 @@ function asb_upsert_draft_product( $asin, $product ) {
     update_post_meta( $product_id, '_virtual', 'no' );
     update_post_meta( $product_id, '_visibility', 'hidden' );
 
-    update_post_meta( $product_id, ASB_META_ASIN, $asin );
-    update_post_meta( $product_id, ASB_META_DRAFT, '1' );
-    update_post_meta( $product_id, ASB_META_MATERIALIZED, time() );
+    update_post_meta( $product_id, IMAGECONV_META_ASIN, $asin );
+    update_post_meta( $product_id, IMAGECONV_META_DRAFT, '1' );
+    update_post_meta( $product_id, IMAGECONV_META_MATERIALIZED, time() );
 
     $img = $product['image_url'] ?? $product['variant_1_url'] ?? '';
     if ( $img ) {
-        asb_attach_external_image( $product_id, $img );
+        imageconv_attach_external_image( $product_id, $img );
     }
 
     return $product_id;
@@ -107,7 +107,7 @@ function asb_upsert_draft_product( $asin, $product ) {
  * Sideload the R2 image into the WP media library and set as product image.
  * Idempotent: if we've already attached an image for this URL, skip.
  */
-function asb_attach_external_image( $product_id, $image_url ) {
+function imageconv_attach_external_image( $product_id, $image_url ) {
     if ( get_post_thumbnail_id( $product_id ) ) {
         return;
     }
@@ -142,9 +142,9 @@ add_action( 'woocommerce_new_order', function ( $order_id ) {
     }
     foreach ( $order->get_items() as $item ) {
         $pid = $item->get_product_id();
-        if ( get_post_meta( $pid, ASB_META_DRAFT, true ) === '1' ) {
+        if ( get_post_meta( $pid, IMAGECONV_META_DRAFT, true ) === '1' ) {
             wp_update_post( [ 'ID' => $pid, 'post_status' => 'publish' ] );
-            update_post_meta( $pid, ASB_META_DRAFT, '0' );
+            update_post_meta( $pid, IMAGECONV_META_DRAFT, '0' );
         }
     }
 } );
@@ -152,14 +152,14 @@ add_action( 'woocommerce_new_order', function ( $order_id ) {
 /**
  * Nightly cleanup: delete phantom drafts older than 24h that never got ordered.
  */
-add_action( 'asb_cleanup_drafts', function () {
+add_action( 'imageconv_cleanup_drafts', function () {
     $cutoff = time() - DAY_IN_SECONDS;
     $ids = get_posts( [
         'post_type'   => 'product',
         'post_status' => 'draft',
         'meta_query'  => [
-            [ 'key' => ASB_META_DRAFT, 'value' => '1' ],
-            [ 'key' => ASB_META_MATERIALIZED, 'value' => $cutoff, 'compare' => '<', 'type' => 'NUMERIC' ],
+            [ 'key' => IMAGECONV_META_DRAFT, 'value' => '1' ],
+            [ 'key' => IMAGECONV_META_MATERIALIZED, 'value' => $cutoff, 'compare' => '<', 'type' => 'NUMERIC' ],
         ],
         'numberposts' => 200,
         'fields'      => 'ids',
@@ -169,6 +169,6 @@ add_action( 'asb_cleanup_drafts', function () {
     }
 } );
 
-if ( ! wp_next_scheduled( 'asb_cleanup_drafts' ) ) {
-    wp_schedule_event( time() + 3600, 'daily', 'asb_cleanup_drafts' );
+if ( ! wp_next_scheduled( 'imageconv_cleanup_drafts' ) ) {
+    wp_schedule_event( time() + 3600, 'daily', 'imageconv_cleanup_drafts' );
 }
