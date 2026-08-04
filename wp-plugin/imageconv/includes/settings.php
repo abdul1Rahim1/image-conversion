@@ -1,10 +1,10 @@
 <?php
 defined( 'ABSPATH' ) || exit;
 
-const ASB_SETTINGS_KEY = 'asb_settings';
+const IMAGECONV_SETTINGS_KEY = 'imageconv_settings';
 
-function asb_settings( $field = null, $default = '' ) {
-    $opts = get_option( ASB_SETTINGS_KEY, [] );
+function imageconv_settings( $field = null, $default = '' ) {
+    $opts = get_option( IMAGECONV_SETTINGS_KEY, [] );
     if ( ! is_array( $opts ) ) {
         $opts = [];
     }
@@ -16,18 +16,18 @@ function asb_settings( $field = null, $default = '' ) {
 
 add_action( 'admin_menu', function () {
     add_options_page(
-        'Amazon Source Bridge',
-        'Amazon Source Bridge',
+        'ImageConv',
+        'ImageConv',
         'manage_options',
-        'amazon-source-bridge',
-        'asb_render_settings_page'
+        'imageconv',
+        'imageconv_render_settings_page'
     );
 } );
 
 add_action( 'admin_init', function () {
     register_setting(
-        'asb_settings_group',
-        ASB_SETTINGS_KEY,
+        'imageconv_settings_group',
+        IMAGECONV_SETTINGS_KEY,
         [
             'sanitize_callback' => function ( $input ) {
                 $out = [];
@@ -40,41 +40,41 @@ add_action( 'admin_init', function () {
     );
 } );
 
-function asb_render_settings_page() {
+function imageconv_render_settings_page() {
     if ( ! current_user_can( 'manage_options' ) ) {
         return;
     }
     ?>
     <div class="wrap">
-        <h1>Amazon Source Bridge</h1>
+        <h1>ImageConv</h1>
         <form method="post" action="options.php">
-            <?php settings_fields( 'asb_settings_group' ); ?>
+            <?php settings_fields( 'imageconv_settings_group' ); ?>
             <table class="form-table">
                 <tr>
-                    <th scope="row"><label for="asb_api_url">API URL</label></th>
+                    <th scope="row"><label for="imageconv_api_url">API URL</label></th>
                     <td>
-                        <input type="url" id="asb_api_url" class="regular-text"
-                               name="<?php echo esc_attr( ASB_SETTINGS_KEY ); ?>[api_url]"
-                               value="<?php echo esc_attr( asb_settings( 'api_url' ) ); ?>"
+                        <input type="url" id="imageconv_api_url" class="regular-text"
+                               name="<?php echo esc_attr( IMAGECONV_SETTINGS_KEY ); ?>[api_url]"
+                               value="<?php echo esc_attr( imageconv_settings( 'api_url' ) ); ?>"
                                placeholder="https://api.yourdomain.com" />
                         <p class="description">Base URL of the FastAPI materialization service (no trailing slash).</p>
                     </td>
                 </tr>
                 <tr>
-                    <th scope="row"><label for="asb_api_key">API Key</label></th>
+                    <th scope="row"><label for="imageconv_api_key">API Key</label></th>
                     <td>
-                        <input type="password" id="asb_api_key" class="regular-text"
-                               name="<?php echo esc_attr( ASB_SETTINGS_KEY ); ?>[api_key]"
-                               value="<?php echo esc_attr( asb_settings( 'api_key' ) ); ?>" />
+                        <input type="password" id="imageconv_api_key" class="regular-text"
+                               name="<?php echo esc_attr( IMAGECONV_SETTINGS_KEY ); ?>[api_key]"
+                               value="<?php echo esc_attr( imageconv_settings( 'api_key' ) ); ?>" />
                         <p class="description">Shared secret sent as the <code>X-API-Key</code> header.</p>
                     </td>
                 </tr>
                 <tr>
-                    <th scope="row"><label for="asb_currency">Currency</label></th>
+                    <th scope="row"><label for="imageconv_currency">Currency</label></th>
                     <td>
-                        <input type="text" id="asb_currency" class="regular-text"
-                               name="<?php echo esc_attr( ASB_SETTINGS_KEY ); ?>[currency]"
-                               value="<?php echo esc_attr( asb_settings( 'currency', 'INR' ) ); ?>" />
+                        <input type="text" id="imageconv_currency" class="regular-text"
+                               name="<?php echo esc_attr( IMAGECONV_SETTINGS_KEY ); ?>[currency]"
+                               value="<?php echo esc_attr( imageconv_settings( 'currency', 'INR' ) ); ?>" />
                         <p class="description">Fallback currency when the catalog row omits it.</p>
                     </td>
                 </tr>

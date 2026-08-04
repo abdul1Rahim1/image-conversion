@@ -2,31 +2,31 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Custom URL /asb/p/{asin} → phantom product page. Polls the API for the
+ * Custom URL /imageconv/p/{asin} → phantom product page. Polls the API for the
  * materialized product; while it's still processing we render a lightweight
  * "preparing" state that auto-refreshes.
  */
-function asb_register_rewrites() {
-    add_rewrite_rule( '^asb/p/([A-Za-z0-9]+)/?$', 'index.php?asb_asin=$matches[1]', 'top' );
-    add_rewrite_tag( '%asb_asin%', '([A-Za-z0-9]+)' );
+function imageconv_register_rewrites() {
+    add_rewrite_rule( '^imageconv/p/([A-Za-z0-9]+)/?$', 'index.php?imageconv_asin=$matches[1]', 'top' );
+    add_rewrite_tag( '%imageconv_asin%', '([A-Za-z0-9]+)' );
 }
 
 add_filter( 'query_vars', function ( $vars ) {
-    $vars[] = 'asb_asin';
+    $vars[] = 'imageconv_asin';
     return $vars;
 } );
 
 add_action( 'template_redirect', function () {
-    $asin = get_query_var( 'asb_asin' );
+    $asin = get_query_var( 'imageconv_asin' );
     if ( ! $asin ) {
         return;
     }
-    asb_render_phantom_product_page( sanitize_text_field( $asin ) );
+    imageconv_render_phantom_product_page( sanitize_text_field( $asin ) );
     exit;
 } );
 
-function asb_render_phantom_product_page( $asin ) {
-    $data = asb_get_product( $asin );
+function imageconv_render_phantom_product_page( $asin ) {
+    $data = imageconv_get_product( $asin );
     if ( is_wp_error( $data ) ) {
         status_header( 502 );
         get_header();
@@ -52,14 +52,14 @@ function asb_render_phantom_product_page( $asin ) {
         echo '<p style="opacity:.7">Status: <code>' . esc_html( $status ) . '</code></p>';
         echo '</div>';
     } else {
-        asb_render_ready_product( $asin, $product );
+        imageconv_render_ready_product( $asin, $product );
     }
 
     echo '</div></main>';
     get_footer();
 }
 
-function asb_render_ready_product( $asin, $product ) {
+function imageconv_render_ready_product( $asin, $product ) {
     $title = $product['Title'] ?? ( $product['title'] ?? '' );
     $desc  = $product['Category'] ?? ( $product['description'] ?? '' );
     $img   = $product['image_url'] ?? ( $product['variant_1_url'] ?? '' );
@@ -71,10 +71,10 @@ function asb_render_ready_product( $asin, $product ) {
 
     $add_url = wp_nonce_url(
         add_query_arg( [
-            'asb_action' => 'add_to_cart',
+            'imageconv_action' => 'add_to_cart',
             'asin'       => $asin,
         ], home_url( '/' ) ),
-        'asb_add_to_cart_' . $asin
+        'imageconv_add_to_cart_' . $asin
     );
 
     echo '<div class="product" style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">';

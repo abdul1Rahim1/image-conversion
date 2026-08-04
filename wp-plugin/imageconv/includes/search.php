@@ -7,10 +7,10 @@ defined( 'ABSPATH' ) || exit;
  * externally-materialized ones appear underneath. Uses WooCommerce's own
  * .products / .product classes so the current theme's CSS styles them.
  */
-add_action( 'woocommerce_after_shop_loop', 'asb_render_external_matches', 20 );
-add_action( 'woocommerce_no_products_found', 'asb_render_external_matches', 20 );
+add_action( 'woocommerce_after_shop_loop', 'imageconv_render_external_matches', 20 );
+add_action( 'woocommerce_no_products_found', 'imageconv_render_external_matches', 20 );
 
-function asb_render_external_matches() {
+function imageconv_render_external_matches() {
     if ( ! is_search() ) {
         return;
     }
@@ -18,12 +18,12 @@ function asb_render_external_matches() {
     if ( $q === '' ) {
         return;
     }
-    $result = asb_search( $q, 20 );
+    $result = imageconv_search( $q, 20 );
     if ( is_wp_error( $result ) || empty( $result['hits'] ) ) {
         return;
     }
 
-    $currency = asb_settings( 'currency', 'INR' );
+    $currency = imageconv_settings( 'currency', 'INR' );
     echo '<div class="asb-external-matches">';
     echo '<h2>' . esc_html( sprintf( 'More matches for "%s"', $q ) ) . '</h2>';
     echo '<ul class="products columns-4">';
@@ -33,7 +33,7 @@ function asb_render_external_matches() {
         $price = isset( $hit['price'] ) ? $hit['price'] : null;
         $cur   = ! empty( $hit['currency'] ) ? $hit['currency'] : $currency;
         $img   = ! empty( $hit['source_image_url'] ) ? esc_url( $hit['source_image_url'] ) : '';
-        $url   = esc_url( home_url( '/asb/p/' . $asin ) );
+        $url   = esc_url( home_url( '/imageconv/p/' . $asin ) );
 
         echo '<li class="product asb-product">';
         echo '<a href="' . $url . '">';

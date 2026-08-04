@@ -36,4 +36,4 @@ curl -s -H "X-API-Key: $KEY" 'http://localhost:8000/product/B0FV2PQ1NQ' | jq
 
 ## Lightsail deployment
 
-See root `README.md` (patch 4 will add a step-by-step: systemd unit + Nginx reverse proxy + Let's Encrypt).
+Step-by-step (systemd + Nginx + Let's Encrypt): see [`DEPLOY.md`](../DEPLOY.md) at the repo root.

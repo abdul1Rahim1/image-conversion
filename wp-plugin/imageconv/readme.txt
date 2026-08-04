@@ -1,4 +1,4 @@
-=== Amazon Source Bridge ===
+=== ImageConv ===
 Contributors: you
 Tags: woocommerce, catalog, dropship, on-demand-products
 Requires at least: 6.0
@@ -32,9 +32,9 @@ created only when an order is placed.
 
 == Setup ==
 
-1.  Install the plugin (upload the `amazon-source-bridge/` folder to
+1.  Install the plugin (upload the `imageconv/` folder to
     `wp-content/plugins/` and activate).
-2.  Go to Settings → Amazon Source Bridge.
+2.  Go to Settings → ImageConv.
 3.  Set API URL (your FastAPI service, e.g.
     `https://api.yourdomain.com`) and API Key (matching the
     `SERVICE_API_KEY` env var on the service).
