@@ -149,7 +149,7 @@ sudo systemctl restart imageconv
 sudo journalctl -u imageconv -f
 ```
 
-**Update the catalog** (whenever your Amazon scrape refreshes):
+**Update the catalog** :
 
 ```bash
 scp new_catalog.json ubuntu@<lightsail-ip>:/opt/imageconv/catalog.json
