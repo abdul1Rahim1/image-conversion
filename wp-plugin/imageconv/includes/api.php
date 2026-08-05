@@ -18,7 +18,7 @@ function imageconv_api_request( $method, $path, $args = [] ) {
     $params = [
         'method'  => strtoupper( $method ),
         'headers' => $headers,
-        'timeout' => 20,
+        'timeout' => isset( $args['timeout'] ) ? (int) $args['timeout'] : 20,
     ];
     if ( ! empty( $args['query'] ) ) {
         $url = add_query_arg( $args['query'], $url );
@@ -51,5 +51,5 @@ function imageconv_get_product( $asin ) {
 }
 
 function imageconv_materialize( $asin ) {
-    return imageconv_api_request( 'POST', '/materialize/' . rawurlencode( $asin ) );
+    return imageconv_api_request( 'POST', '/materialize/' . rawurlencode( $asin ), [ 'timeout' => 90 ] );
 }

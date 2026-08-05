@@ -5,7 +5,7 @@ defined( 'ABSPATH' ) || exit;
  * Cart + order integration.
  *
  * "Add to cart" for a phantom product:
- *   1. Force-materialize via the API (bypass cache).
+ *   1. Fetch cached product from the API; fall back to materialize on cache miss.
  *   2. Create a WC product as `draft` — invisible to the public shop.
  *   3. Add that product to the cart.
  *   4. Redirect to checkout.
@@ -35,7 +35,10 @@ add_action( 'template_redirect', function () {
         wp_die( 'WooCommerce not available' );
     }
 
-    $data = imageconv_materialize( $asin );
+    $data = imageconv_get_product( $asin );
+    if ( is_wp_error( $data ) || ! is_array( $data ) || ( ( $data['status'] ?? '' ) !== 'ready' ) ) {
+        $data = imageconv_materialize( $asin );
+    }
     if ( is_wp_error( $data ) ) {
         wp_die( 'Could not prepare product: ' . esc_html( $data->get_error_message() ) );
     }

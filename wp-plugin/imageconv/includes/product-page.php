@@ -41,12 +41,12 @@ function imageconv_render_phantom_product_page( $asin ) {
     $product = isset( $data['product'] ) ? $data['product'] : null;
 
     get_header();
-    echo '<main class="site-main"><div class="asb-single-product" style="max-width:1200px;margin:2rem auto;padding:0 1rem;">';
+    echo '<div id="primary" class="content-area primary"><main id="main" class="site-main">';
+    echo '<div class="ast-container">';
 
     if ( $status !== 'ready' || ! $product ) {
-        // Auto-refresh every 6s while the background job runs
         echo '<meta http-equiv="refresh" content="6" />';
-        echo '<div style="text-align:center;padding:4rem 1rem;">';
+        echo '<div class="entry-content" style="text-align:center;padding:4rem 1rem;">';
         echo '<h1>Preparing your product…</h1>';
         echo '<p>This usually takes under a minute. This page will refresh automatically.</p>';
         echo '<p style="opacity:.7">Status: <code>' . esc_html( $status ) . '</code></p>';
@@ -55,7 +55,7 @@ function imageconv_render_phantom_product_page( $asin ) {
         imageconv_render_ready_product( $asin, $product );
     }
 
-    echo '</div></main>';
+    echo '</div></main></div>';
     get_footer();
 }
 
@@ -77,14 +77,21 @@ function imageconv_render_ready_product( $asin, $product ) {
         'imageconv_add_to_cart_' . $asin
     );
 
-    echo '<div class="product" style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">';
-    echo '<div class="asb-image">';
+    echo '<div class="woocommerce">';
+    echo '<div class="product type-product">';
+
+    echo '<div class="woocommerce-product-gallery woocommerce-product-gallery--with-images images">';
     if ( $img ) {
-        echo '<img src="' . esc_url( $img ) . '" alt="' . esc_attr( $title ) . '" style="width:100%;height:auto;border-radius:8px;" />';
+        echo '<figure class="woocommerce-product-gallery__wrapper">';
+        echo '<div class="woocommerce-product-gallery__image">';
+        echo '<img src="' . esc_url( $img ) . '" alt="' . esc_attr( $title ) . '" />';
+        echo '</div>';
+        echo '</figure>';
     }
     echo '</div>';
-    echo '<div class="asb-summary">';
-    echo '<h1 class="product_title">' . esc_html( $title ) . '</h1>';
+
+    echo '<div class="summary entry-summary">';
+    echo '<h1 class="product_title entry-title">' . esc_html( $title ) . '</h1>';
     if ( $price !== null ) {
         echo '<p class="price"><span class="woocommerce-Price-amount amount">' .
             esc_html( $cur ) . ' ' . esc_html( number_format_i18n( (float) $price, 2 ) ) .
@@ -93,7 +100,11 @@ function imageconv_render_ready_product( $asin, $product ) {
     echo '<div class="woocommerce-product-details__short-description">';
     echo wp_kses_post( wpautop( $desc ) );
     echo '</div>';
-    echo '<p><a href="' . esc_url( $add_url ) . '" class="single_add_to_cart_button button alt">Add to cart</a></p>';
+    echo '<form class="cart" method="get" action="' . esc_url( $add_url ) . '">';
+    echo '<a href="' . esc_url( $add_url ) . '" class="single_add_to_cart_button button alt">Add to cart</a>';
+    echo '</form>';
+    echo '</div>';
+
     echo '</div>';
     echo '</div>';
 }
