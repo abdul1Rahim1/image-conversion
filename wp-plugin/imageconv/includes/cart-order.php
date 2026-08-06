@@ -28,7 +28,7 @@ const IMAGECONV_META_MATERIALIZED = '_imageconv_materialized_at';
  * carrying our phantom marker.
  */
 add_filter( 'woocommerce_is_purchasable', function ( $purchasable, $product ) {
-    if ( $product && '' !== get_post_meta( $product->get_id(), IMAGECONV_META_DRAFT, true ) ) {
+    if ( ! $purchasable && $product && get_post_meta( $product->get_id(), IMAGECONV_META_DRAFT, true ) === '1' ) {
         return true;
     }
     return $purchasable;
@@ -80,7 +80,7 @@ add_action( 'template_redirect', function () {
 function imageconv_upsert_draft_product( $asin, $product ) {
     $existing = get_posts( [
         'post_type'   => 'product',
-        'post_status' => [ 'publish', 'draft', 'private' ],
+        'post_status' => [ 'publish' ],
         'meta_key'    => IMAGECONV_META_ASIN,
         'meta_value'  => $asin,
         'numberposts' => 1,
@@ -99,11 +99,7 @@ function imageconv_upsert_draft_product( $asin, $product ) {
             return $product_id;
         }
         wp_set_object_terms( $product_id, 'simple', 'product_type' );
-    } else {
-        // Ensure a previously-created phantom is published.
-        if ( get_post_status( $product_id ) !== 'publish' ) {
-            wp_update_post( [ 'ID' => $product_id, 'post_status' => 'publish' ] );
-        }
+        wp_set_object_terms( $product_id, [ 'exclude-from-catalog', 'exclude-from-search' ], 'product_visibility' );
     }
 
     $price = (float) ( $product['Price (INR)'] ?? $product['price'] ?? 0 );
@@ -113,12 +109,6 @@ function imageconv_upsert_draft_product( $asin, $product ) {
     update_post_meta( $product_id, '_manage_stock', 'no' );
     update_post_meta( $product_id, '_stock_status', 'instock' );
     update_post_meta( $product_id, '_virtual', 'no' );
-    // WC 3.0+ controls visibility via taxonomy, not the legacy _visibility meta.
-    wp_set_object_terms(
-        $product_id,
-        [ 'exclude-from-catalog', 'exclude-from-search' ],
-        'product_visibility'
-    );
 
     update_post_meta( $product_id, IMAGECONV_META_ASIN, $asin );
     update_post_meta( $product_id, IMAGECONV_META_DRAFT, '1' );
@@ -178,14 +168,14 @@ add_action( 'woocommerce_new_order', function ( $order_id ) {
 } );
 
 /**
- * Nightly cleanup: delete unordered phantom products older than 24h. These are
- * published-but-hidden (marker '1'); legacy drafts are swept too.
+ * Nightly cleanup: delete unordered phantom products older than 24h. They are
+ * published-but-hidden and still marked pending (marker '1').
  */
 add_action( 'imageconv_cleanup_drafts', function () {
     $cutoff = time() - DAY_IN_SECONDS;
     $ids = get_posts( [
         'post_type'   => 'product',
-        'post_status' => [ 'publish', 'draft' ],
+        'post_status' => 'publish',
         'meta_query'  => [
             [ 'key' => IMAGECONV_META_DRAFT, 'value' => '1' ],
             [ 'key' => IMAGECONV_META_MATERIALIZED, 'value' => $cutoff, 'compare' => '<', 'type' => 'NUMERIC' ],
