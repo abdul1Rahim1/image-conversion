@@ -5,19 +5,34 @@ defined( 'ABSPATH' ) || exit;
  * Cart + order integration.
  *
  * "Add to cart" for a phantom product:
- *   1. Force-materialize via the API (bypass cache).
- *   2. Create a WC product as `draft` — invisible to the public shop.
+ *   1. Fetch cached product from the API; fall back to materialize on cache miss.
+ *   2. Create a `publish` WC product hidden from catalog/search — so it is
+ *      purchasable (draft products get dropped from the cart by
+ *      WC_Cart::check_cart_items) but never shows in the shop grid.
  *   3. Add that product to the cart.
  *   4. Redirect to checkout.
  *
  * On order placed (`woocommerce_new_order`):
- *   Flip any draft phantom products in the order to `publish` so they
- *   become real products in the WooCommerce DB tied to that order.
+ *   Clear the phantom marker so the nightly cleanup skips it — the product
+ *   is already published and now permanently tied to that order.
  */
 
 const IMAGECONV_META_ASIN         = '_imageconv_source_asin';
+// '1' = unordered phantom (cleanup candidate), '0' = sold (kept permanently).
 const IMAGECONV_META_DRAFT        = '_imageconv_phantom_draft';
 const IMAGECONV_META_MATERIALIZED = '_imageconv_materialized_at';
+
+/**
+ * Hidden phantom products must still be purchasable. A theme/plugin filter
+ * could otherwise reject a hidden product; force purchasable for anything
+ * carrying our phantom marker.
+ */
+add_filter( 'woocommerce_is_purchasable', function ( $purchasable, $product ) {
+    if ( ! $purchasable && $product && get_post_meta( $product->get_id(), IMAGECONV_META_DRAFT, true ) === '1' ) {
+        return true;
+    }
+    return $purchasable;
+}, 10, 2 );
 
 add_action( 'template_redirect', function () {
     if ( ! isset( $_GET['imageconv_action'] ) || $_GET['imageconv_action'] !== 'add_to_cart' ) {
@@ -35,7 +50,10 @@ add_action( 'template_redirect', function () {
         wp_die( 'WooCommerce not available' );
     }
 
-    $data = imageconv_materialize( $asin );
+    $data = imageconv_get_product( $asin );
+    if ( is_wp_error( $data ) || ! is_array( $data ) || ( ( $data['status'] ?? '' ) !== 'ready' ) ) {
+        $data = imageconv_materialize( $asin );
+    }
     if ( is_wp_error( $data ) ) {
         wp_die( 'Could not prepare product: ' . esc_html( $data->get_error_message() ) );
     }
@@ -55,13 +73,14 @@ add_action( 'template_redirect', function () {
 } );
 
 /**
- * Find an existing draft phantom product for this ASIN or create one.
- * Kept as draft until the order is placed.
+ * Find an existing phantom product for this ASIN or create one. Published
+ * immediately (so it's purchasable) but hidden from catalog/search via the
+ * product_visibility taxonomy.
  */
 function imageconv_upsert_draft_product( $asin, $product ) {
     $existing = get_posts( [
         'post_type'   => 'product',
-        'post_status' => [ 'draft', 'private' ],
+        'post_status' => [ 'publish' ],
         'meta_key'    => IMAGECONV_META_ASIN,
         'meta_value'  => $asin,
         'numberposts' => 1,
@@ -73,13 +92,14 @@ function imageconv_upsert_draft_product( $asin, $product ) {
         $product_id = wp_insert_post( [
             'post_title'   => wp_strip_all_tags( $product['Title'] ?? $product['title'] ?? '' ),
             'post_content' => (string) ( $product['Category'] ?? $product['description'] ?? '' ),
-            'post_status'  => 'draft',
+            'post_status'  => 'publish',
             'post_type'    => 'product',
         ], true );
         if ( is_wp_error( $product_id ) ) {
             return $product_id;
         }
         wp_set_object_terms( $product_id, 'simple', 'product_type' );
+        wp_set_object_terms( $product_id, [ 'exclude-from-catalog', 'exclude-from-search' ], 'product_visibility' );
     }
 
     $price = (float) ( $product['Price (INR)'] ?? $product['price'] ?? 0 );
@@ -89,7 +109,6 @@ function imageconv_upsert_draft_product( $asin, $product ) {
     update_post_meta( $product_id, '_manage_stock', 'no' );
     update_post_meta( $product_id, '_stock_status', 'instock' );
     update_post_meta( $product_id, '_virtual', 'no' );
-    update_post_meta( $product_id, '_visibility', 'hidden' );
 
     update_post_meta( $product_id, IMAGECONV_META_ASIN, $asin );
     update_post_meta( $product_id, IMAGECONV_META_DRAFT, '1' );
@@ -132,8 +151,8 @@ function imageconv_attach_external_image( $product_id, $image_url ) {
 }
 
 /**
- * When any order is created, publish the phantom draft products it contains.
- * That's the moment the product becomes real in the WooCommerce DB.
+ * When any order is created, mark its phantom products as sold so the nightly
+ * cleanup skips them. They are already published — no status change needed.
  */
 add_action( 'woocommerce_new_order', function ( $order_id ) {
     $order = wc_get_order( $order_id );
@@ -143,20 +162,20 @@ add_action( 'woocommerce_new_order', function ( $order_id ) {
     foreach ( $order->get_items() as $item ) {
         $pid = $item->get_product_id();
         if ( get_post_meta( $pid, IMAGECONV_META_DRAFT, true ) === '1' ) {
-            wp_update_post( [ 'ID' => $pid, 'post_status' => 'publish' ] );
             update_post_meta( $pid, IMAGECONV_META_DRAFT, '0' );
         }
     }
 } );
 
 /**
- * Nightly cleanup: delete phantom drafts older than 24h that never got ordered.
+ * Nightly cleanup: delete unordered phantom products older than 24h. They are
+ * published-but-hidden and still marked pending (marker '1').
  */
 add_action( 'imageconv_cleanup_drafts', function () {
     $cutoff = time() - DAY_IN_SECONDS;
     $ids = get_posts( [
         'post_type'   => 'product',
-        'post_status' => 'draft',
+        'post_status' => 'publish',
         'meta_query'  => [
             [ 'key' => IMAGECONV_META_DRAFT, 'value' => '1' ],
             [ 'key' => IMAGECONV_META_MATERIALIZED, 'value' => $cutoff, 'compare' => '<', 'type' => 'NUMERIC' ],
