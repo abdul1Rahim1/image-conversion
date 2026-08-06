@@ -11,7 +11,7 @@ class Catalog:
         p = Path(path)
         if not p.exists():
             raise FileNotFoundError(f"Catalog file not found: {path}")
-        data = json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(p.read_text(encoding="utf-8-sig"))
         rows = data["products"] if isinstance(data, dict) and "products" in data else data
         self._rows: list[dict] = list(rows)
         self._by_id: dict[str, dict] = {}
